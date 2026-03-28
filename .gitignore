@@ -1,6 +1,8 @@
-.env
-.venv/
-__pycache__/
+apps/backend/.env
+apps/backend/venv
+apps/backend/__pycache__/
+apps/web/node_modules/
+apps/web/.next/
 *.pyc
 *.json
 KeyGet.py

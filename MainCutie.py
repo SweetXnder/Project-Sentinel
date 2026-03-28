@@ -18,7 +18,6 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY") # Use Own API KEY
 
 client = genai.Client(api_key=GEMINI_KEY)
 
-
 # PHASE 1: SATELLITE (SENTINEL-2) ENGINE
 
 def get_sentinel_token():
@@ -26,12 +25,13 @@ def get_sentinel_token():
     payload = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "grant_type": "client_credentials"}
     try:
         res = requests.post(url, data=payload, timeout=10)
-        return res.json().get("access_token") #A token is required to access the Sentinel-2 API. This function retrieves it using the client credentials provided in the .env file. If the request is successful, it returns the access token; otherwise, it returns None.
+        return res.json().get("access_token") 
     except: return None
 
 def fetch_satellite_metrics(lat, lon):
-    token = get_sentinel_token()
-    if not token: return None # If the token retrieval fails, the function returns None, indicating that it cannot proceed with fetching satellite data.
+    token = get_sentinel_token() # A token to access the Sentinel-2 API.
+    if not token: return None 
+    
     bbox = [lon - 0.005, lat - 0.005, lon + 0.005, lat + 0.005] # The function constructs a bounding box (bbox) around the specified latitude and longitude. This bbox defines the area for which satellite data will be fetched. The bbox is created by adding and subtracting a small value (0.005) from the latitude and longitude to create a square area around the point of interest. Also it equates to 1.21 km squared.
     evalscript = """
     //VERSION=3
@@ -48,7 +48,7 @@ def fetch_satellite_metrics(lat, lon):
         };
     }
     """
-    for col in ["sentinel-2-l2a", "sentinel-2-l1c"]: # if one does not works, we have a fallback. L2A is usually preferred for its atmospheric correction, but L1C can be used if L2A data is unavailable or has issues.
+    for col in ["sentinel-2-l2a", "sentinel-2-l1c"]: # If one doe not work, try the other. L2A is usually better quality but may not be available for all dates/locations, while L1C is more widely available but less processed.
         print(f"📡 Checking {col.upper()}...") 
         payload = {
             "input": {"bounds": {"bbox": bbox}, "data": [{"type": col, "dataFilter": {"maxCloudCoverage": 100}}]},
@@ -64,28 +64,36 @@ def fetch_satellite_metrics(lat, lon):
             if data.get('data') and len(data['data']) > 0:
                 stats = data['data'][0]['outputs']['default']['bands']
                 b02, b03, b04, b08, b8a, b11 = stats['B0']['stats']['mean'], stats['B1']['stats']['mean'], stats['B2']['stats']['mean'], stats['B3']['stats']['mean'], stats['B4']['stats']['mean'], stats['B5']['stats']['mean']
+                
+                # We now return the calculated indices AND the raw bands used to compute them
+                # These are the formulas for the indices (Avaialbe in the Sentinel-2 documentation):
                 return {
-                    # Formulas for the indices. We also add a check to prevent division by zero, which can happen if the bands have very low values. (these formulas are available in the Sentinel-2 documentation and are standard in remote sensing analysis)
                     "NDVI": round((b08 - b04) / (b08 + b04), 4) if (b08 + b04) != 0 else 0, 
                     "NDWI": round((b03 - b08) / (b03 + b08), 4) if (b03 + b08) != 0 else 0,
                     "NDBI": round((b11 - b08) / (b11 + b08), 4) if (b11 + b08) != 0 else 0,
                     "NDMI": round((b8a - b11) / (b8a + b11), 4) if (b8a + b11) != 0 else 0,
+                    "raw_bands": {
+                        "B02 (Blue)": round(b02, 5),
+                        "B03 (Green)": round(b03, 5),
+                        "B04 (Red)": round(b04, 5),
+                        "B08 (Near Infrared)": round(b08, 5),
+                        "B8A (Narrow NIR)": round(b8a, 5),
+                        "B11 (Shortwave IR)": round(b11, 5)
+                    },
                     "quality": col.upper()
                 }
         except: continue
     return None
 
 
-# PHASE 2: AI API (GEMINI) ENGINE {for comprehensive report and analysis}
+# PHASE 2: AI API (GEMINI) ENGINE
 
 def get_ai_analysis(metrics, location):
-    # If one model is 503 (Busy), the script will try the next one automatically
     models_to_try = [
         "models/gemini-3-flash-preview", 
-        "models/gemini-2.0-flash", 
-        "models/gemini-1.5-flash"
+        "models/gemini-2.0-flash"
     ]
-# The prompt is designed to elicit a detailed and structured response from the AI, covering the meanings of the indices, a risk assessment that takes into account the specific challenges faced by the Philippines (like typhoons and urban heat), and actionable recommendations across multiple sectors. The prompt also emphasizes the need for high detail and relevance to the tropical context of the country, ensuring that the AI's analysis is both comprehensive and contextually appropriate.
+
     prompt = f""" 
     Act as a Chief Urban Sustainability Scientist for the Philippines. 
     Analyze these indices for {location}:
@@ -111,7 +119,7 @@ def get_ai_analysis(metrics, location):
             )
             return json.loads(response.text)
         except Exception as e:
-            if "503" in str(e) or "429" in str(e): # Usual errors while using Gemini API Free tier.
+            if "503" in str(e) or "429" in str(e): 
                 print(f"⚠️  {model_name} is busy or rate-limited. Shifting to next model...")
                 time.sleep(2)
                 continue
@@ -119,9 +127,7 @@ def get_ai_analysis(metrics, location):
             continue
     return None
 
-# ---------------------------------------------------------
-# EXECUTION
-# ---------------------------------------------------------
+# Enter Location = Assesment and Recommendation Report Generation
 if __name__ == "__main__":
     print("\n" + "="*60 + "\n🌍 CODINGCUTIES: URBANPLANNER\n" + "="*60)
     loc_name = input("📍 Enter Location: ")
@@ -135,7 +141,7 @@ if __name__ == "__main__":
         print(f"✅ Metric Quality: {results['quality']}")
         analysis = get_ai_analysis(results, loc_name)
         if analysis:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M") # This timestamp format ensures that the filename is unique and indicates when the report was generated. It includes the date (year, month, day) and time (hour, minute), which can be helpful for tracking and organizing multiple reports over time.
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M") 
             filename = f"Analytic_Report_{loc_name.replace(' ', '_')}_{timestamp}.json"
             with open(BASE_DIR / filename, "w") as f:
                 json.dump({"metadata": results, "report": analysis}, f, indent=4)

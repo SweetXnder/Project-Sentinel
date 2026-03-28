@@ -3,6 +3,7 @@ apps/backend/venv
 apps/backend/__pycache__/
 apps/web/node_modules/
 apps/web/.next/
+apps/web/.env.local
 *.pyc
 *.json
 KeyGet.py

@@ -1,5 +1,6 @@
-google-genai
-python-dotenv
+streamlit
+folium
+streamlit-folium
 requests
-fastapi
-uvicorn
+python-dotenv
+google-genai

@@ -1,13 +1,12 @@
-apps/backend/.env
-apps/backend/venv
-apps/backend/__pycache__/
-apps/web/node_modules/
-apps/web/.next/
-apps/web/.env.local
+# Environments
+.env
+__pycache__/
 *.pyc
-*.json
-KeyGet.py
-test_ai.py
-testing.py
-APIREQUESTSENTINEL.py
-GeminiReport.py
+
+# Virtual environments
+venv/
+env/
+
+# OS generated files
+.DS_Store
+Thumbs.db

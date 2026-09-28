@@ -1,12 +1,6 @@
-# Environments
-.env
+.venv/
+venv/
 __pycache__/
 *.pyc
-
-# Virtual environments
-venv/
-env/
-
-# OS generated files
+.env
 .DS_Store
-Thumbs.db
